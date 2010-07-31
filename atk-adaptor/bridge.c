@@ -224,6 +224,11 @@ register_application (SpiBridge * app)
 
       app->desktop_name = g_strdup (app_name);
       app->desktop_path = g_strdup (obj_path);
+
+/* could this be better, we accept some amount of race in getting the temp name*/
+/* make sure the directory exists */
+mkdir("/tmp/at-spi2/", 0);
+app->app_bus_addr = mktmp("/tmp/at-spi2/app-socket-xxxxxx");
     }
   else
     {
@@ -406,6 +411,30 @@ install_plug_hooks ()
   socket_class->embed = socket_embed_hook;
 }
 
+static void new_connection_cb(DBusServer *server, DBusConnection *con, void *data)
+{
+dbus_connection_ref(con);
+dbus_connection_setup_with_g_main(con, NULL);
+}
+
+static int setup_bus(void)
+{
+DBusServer *server;
+DBusError err;
+
+dbus_error_init(&err);
+	server = dbus_server_listen(spi_global_app_data->app_bus_addr, &err);
+
+/* is there a better way to handle this */
+if(server == NULL) return -1;
+
+dbus_server_setup_with_g_main(server, NULL);
+dbus_server_set_new_connection_function(server, new_connection_cb, NULL, NULL);
+
+return 0;
+}
+
+
 gchar *atspi_dbus_name = NULL;
 static gboolean atspi_no_register = FALSE;
 
@@ -435,6 +464,7 @@ introspect_children_cb (char *path, void *data)
  *
  * - DRoute for routing message to their accessible objects.
  * - Event handlers for emmitting signals on specific ATK events.
+ * - setup the bus for p2p communication
  * - Application registration with the AT-SPI registry.
  *
  */
@@ -557,6 +587,8 @@ adaptor_init (gint * argc, gchar ** argv[])
   /* Register this app by sending a signal out to AT-SPI registry daemon */
   if (!atspi_no_register && (!root || !ATK_IS_PLUG (root)))
     register_application (spi_global_app_data);
+
+  setup_bus();
 
   g_atexit (exit_func);
 
