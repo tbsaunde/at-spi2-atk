@@ -32,6 +32,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#include<sys/stat.h>
 #include <atk/atk.h>
 
 #include <droute/droute.h>
@@ -209,7 +210,7 @@ register_application (SpiBridge * app)
     {
       DBusMessageIter iter, iter_struct;
       gchar *app_name, *obj_path;
-char *file_template = "/tmp/at-spi2/app-socket-xxxxxx";
+const int max_addr_length = 128; /* should be long enough */
 
       if (strcmp (dbus_message_get_signature (reply), "(so)") != 0)
         {
@@ -228,8 +229,10 @@ char *file_template = "/tmp/at-spi2/app-socket-xxxxxx";
 
 /* could this be better, we accept some amount of race in getting the temp name*/
 /* make sure the directory exists */
-mkdir("/tmp/at-spi2/", 0);
-app->app_bus_addr = mktemp(file_template);
+mkdir("/tmp/at-spi2/", S_IRWXU);
+app->app_bus_addr = g_malloc(max_addr_length * sizeof(char));
+sprintf(app->app_bus_addr, "unix:path=/tmp/at-spi2/socket-%d-%d", getpid(),
+rand());
     }
   else
     {
